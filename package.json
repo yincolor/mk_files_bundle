@@ -1,0 +1,17 @@
+{
+  "name": "file_concat",
+  "module": "main.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "mime-type": "^5.0.2"
+  },
+  "scripts": {
+    "test": "bun run main.ts -i ./test/ -o ./output/pack.bin"
+  }
+}
