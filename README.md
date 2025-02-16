@@ -1,4 +1,4 @@
-# simple-virtual-file-system-bun
+# mk_files_bundle
 基于Bun，打包一个目录，制作简易的虚拟文件系统的程序
 
 1、打包目录：
