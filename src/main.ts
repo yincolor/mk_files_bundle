@@ -1,48 +1,61 @@
 import fs from "node:fs";
 import path from "node:path";
-import { mimeType } from 'mime-type/with-db'; 
+import { mimeType } from 'mime-type/with-db';
 import { appendFileBufferToFile, createEmptyFile } from "./file_tools";
-import { base64Encode, numberToUint8Array, uint8ArrayToNumber } from "./crypto";
+import { base64Encode, numberToUint8Array, uint8ArrayToNumber, simpleEncryption } from "./crypto";
 
 // command -i 【目录路径】 
 async function main() {
     console.log(process.argv);
     const param = getCommandParam(process.argv);
     if (param == null) {
-        console.log('无效的命令行参数'); 
+        console.log('无效的命令行参数');
         return;
     }
 
     const fileMetaList = await getFileMeta(param.inputDir);
     console.log(fileMetaList);
     // 创建二进制文件
-    createEmptyFile(param.outFilePath); 
-    const virtualFileMetaList:VirtualFileMeta[] = []; 
-    for(let i = 0; i<fileMetaList.length;i++){
-        const fileMeta = fileMetaList[i]; 
-        virtualFileMetaList[i] = {path: fileMeta.virtualPath, offset: fileMeta.virtualOffset, size: fileMeta.size, contentType: fileMeta.contentType}; 
-        const isOk = await appendFileBufferToFile(fileMeta.fileReadPath, fileMeta.size, param.outFilePath); 
-        if(isOk == false){
+    createEmptyFile(param.outFilePath);
+    // 数据追加到文件中
+    const virtualFileMetaList: VirtualFileMeta[] = [];
+    for (let i = 0; i < fileMetaList.length; i++) {
+        const fileMeta = fileMetaList[i];
+        virtualFileMetaList[i] = { path: fileMeta.virtualPath, offset: fileMeta.virtualOffset, size: fileMeta.size, contentType: fileMeta.contentType };
+        const isOk = await appendFileBufferToFile(fileMeta.fileReadPath, fileMeta.size, param.outFilePath, (data) => {
+            if (param.key) {
+                // 使用设置的0-256的加密密钥进行加密
+                const new_array = simpleEncryption(Uint8Array.from(data), param.key); 
+                return Buffer.from(new_array); 
+            } else {
+                return data;
+            }
+        });
+        if (isOk == false) {
             console.log('生成打包文件失败，请检查。');
-            return; 
+            return;
         }
     }
     // 追加打包文件元数据
-    const virtualMetaBase64Data = base64Encode(JSON.stringify(virtualFileMetaList));
+    const virtualMeta = {
+        data: virtualFileMetaList,
+        key: param.key
+    }
+    const virtualMetaBase64Data = base64Encode(JSON.stringify(virtualMeta));
     fs.appendFileSync(param.outFilePath, virtualMetaBase64Data);
     // 追加打包文件元数据长度信息
-    const virtualMetaDataLength = virtualMetaBase64Data.length; 
+    const virtualMetaDataLength = virtualMetaBase64Data.length;
     console.log(`文件元数据长度: ${virtualMetaDataLength}`);
     console.log(numberToUint8Array(virtualMetaDataLength, 8));
     console.log(uint8ArrayToNumber(numberToUint8Array(virtualMetaDataLength, 8)));
-    
-    fs.appendFileSync(param.outFilePath, numberToUint8Array(virtualMetaDataLength, 8)); 
+
+    fs.appendFileSync(param.outFilePath, numberToUint8Array(virtualMetaDataLength, 8));
 } main();
 
 /** 文件元数据 */
 type FileMeta = { fileReadPath: string, virtualPath: string, virtualOffset: number, size: number, contentType: string };
 /** 虚拟文件元数据 */
-type VirtualFileMeta = { path: string,  offset: number, size: number, contentType: string };
+type VirtualFileMeta = { path: string, offset: number, size: number, contentType: string };
 /**
  * 获取目录下所有文件的元数据
  */
@@ -85,7 +98,8 @@ async function getFileMeta(dirPath: string, _virtualPath = '/', _isRoot = true) 
 /** 获取参数 */
 function getCommandParam(args: string[]) {
     let inputDir = null;
-    let outFilePath:string|null = './out.bin'; 
+    let outFilePath: string | null = './out.bin';
+    let key: number | null = null;
     for (let i = 0; i < args.length; i++) {
         if (args[i] === '-i') {
             inputDir = (i + 1) >= args.length ? null : args[i + 1];
@@ -93,10 +107,20 @@ function getCommandParam(args: string[]) {
         }
         if (args[i] === '-o') {
             outFilePath = (i + 1) >= args.length ? null : args[i + 1];
+            continue;
+        }
+        if (args[i] === '-key') {
+            const _k = (i + 1) >= args.length ? null : args[i + 1];
+            if (_k === null || isNaN(Number(_k))) {
+                continue;
+            } else {
+                key = Number(_k);
+                continue;
+            }
         }
     }
     if (inputDir && outFilePath) {
-        return { inputDir, outFilePath }
+        return { inputDir, outFilePath, key }
     } else {
         return null;
     }

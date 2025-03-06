@@ -1,6 +1,6 @@
 {
   "name": "file_concat",
-  "module": "main.ts",
+  "module": "src/main.ts",
   "type": "module",
   "devDependencies": {
     "@types/bun": "latest"
@@ -12,6 +12,7 @@
     "mime-type": "^5.0.2"
   },
   "scripts": {
-    "test": "bun run main.ts -i ./test/ -o ./output/pack.bin"
+    "test": "bun run src/main.ts -i ./test/ -o ./output/pack.bin -key 123",
+    "read_test": "bun run src/test/test_read.ts"
   }
 }
