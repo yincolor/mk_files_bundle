@@ -16,3 +16,8 @@ bun run src/main.ts -i ./test/ -o ./output/pack.bin -key 123
 src/read_bundle.ts 是加载和读取打包文件的模块。
 
 src/test/tes_read.ts 展示了该模块的使用方法。
+
+可以执行下面的命令测试：
+```
+bun run src/test/test_read.ts
+```
