@@ -60,7 +60,7 @@ export class BundleReader {
         return null;
     }
     /** 读取打包文件中的一个文件 */
-    async read(virtualPath: string):Promise<{ contentType:string, readSize:number, dataType: 'Uint8Array', data: Uint8Array } | { contentType:string, readSize:number, dataType: 'ReadableStream', data:ReadableStream } |null>  {
+    async read(virtualPath: string): Promise<{ contentType: string, readSize: number, dataType: 'Uint8Array', data: Uint8Array } | { contentType: string, readSize: number, dataType: 'ReadableStream', data: ReadableStream } | null> {
         const fileMeta = this.getVirtualFileMeta(virtualPath);
         if (fileMeta === null) {
             return null;
@@ -71,38 +71,40 @@ export class BundleReader {
             if (size <= this.fileReadThreshold) {
                 // 小文件直接读取返回
                 const data = await this.bundleFile.slice(offset, offset + size, "application/octet-stream").bytes();
-                return { contentType, readSize: data.byteLength, dataType: 'Uint8Array', data: this.key===null?data:simpleDecryption(data,this.key) }; 
-            }else {
+                return { contentType, readSize: data.byteLength, dataType: 'Uint8Array', data: this.key === null ? data : simpleDecryption(data, this.key) };
+            } else {
                 // 大文件返回一个可读流
                 const initialOffset = offset; // 初始偏移量
                 const readEndOffset = initialOffset + size; // 读取终点的偏移量
                 let readingFileOffset = initialOffset; // 当前读取文件的偏移量
                 const readChunkSize = this.fileReadThreshold; //设定每次读取的字节长度
                 const data = new ReadableStream({
-                    start: (controller) => {
-                        function pushData(bunFile:BunFile, key:number|null) {
-                            // const cache = new Uint8Array(readChunkSize);
-                            bunFile.slice(readingFileOffset, readingFileOffset + readChunkSize, "application/octet-stream").bytes().then((readedArray)=>{
-                                readingFileOffset += readedArray.byteLength;
-                                // console.log(`${readingFileOffset}/${readEndOffset}  ${readingFileOffset-initialOffset}/${size} read_len=${readedArray.byteLength}`);
-                                if(readingFileOffset < readEndOffset){
-                                    controller.enqueue(key === null?readedArray:simpleDecryption(readedArray,key));
-                                    pushData(bunFile, key); 
-                                }else if(readingFileOffset === readEndOffset){
-                                    controller.enqueue(key === null?readedArray:simpleDecryption(readedArray,key));
-                                    controller.close(); 
-                                }else {
-                                    // 读取的偏移量已超过结束偏移量
-                                    const arr = readedArray.slice(0, readedArray.byteLength - (readingFileOffset - readEndOffset));
-                                    controller.enqueue(key === null?arr:simpleDecryption(arr,key));
-                                    controller.close(); 
-                                }
-                            });
+                    start: async (controller) => {
+                        const bunFile = this.bundleFile;
+                        const key = this.key;
+                        while (true) {
+                            const cache = new Uint8Array(readChunkSize);
+                            const readedArray = await bunFile.slice(readingFileOffset, readingFileOffset + readChunkSize, "application/octet-stream").bytes();
+                            readingFileOffset += readedArray.byteLength;
+                            // console.log(`${readingFileOffset}/${readEndOffset}  ${readingFileOffset-initialOffset}/${size} read_len=${readedArray.byteLength}`);
+                            if (readingFileOffset < readEndOffset) {
+                                controller.enqueue(key === null ? readedArray : simpleDecryption(readedArray, key));
+                                // pushData(bunFile, key); 
+                            } else if (readingFileOffset === readEndOffset) {
+                                controller.enqueue(key === null ? readedArray : simpleDecryption(readedArray, key));
+                                controller.close();
+                                break; 
+                            } else {
+                                // 读取的偏移量已超过结束偏移量
+                                const arr = readedArray.slice(0, readedArray.byteLength - (readingFileOffset - readEndOffset));
+                                controller.enqueue(key === null ? arr : simpleDecryption(arr, key));
+                                controller.close();
+                                break; 
+                            }
                         }
-                        pushData(this.bundleFile, this.key); 
                     }
                 });
-                return { contentType, readSize:size, dataType: 'ReadableStream', data }; 
+                return { contentType, readSize: size, dataType: 'ReadableStream', data };
             }
         }
     }
